@@ -2,7 +2,6 @@
 # progress. We can also use it to compare the execution of the old and new versions of the code (or even different
 # models of the neural network).
 #----------------------------------------------------------------------------------------------------------------------#
-
 #==================== Importation des modules ====================#
 import time
 import os

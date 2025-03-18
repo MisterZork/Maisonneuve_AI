@@ -20,11 +20,11 @@ class Neurone:
             if l == 0:
                 self.activations[l] = np.zeros((self.nb_neurone[l], 1))
                 continue
-            self.poids[l] = np.random.normal(0, 2, (nb_neurone[l], nb_neurone[l-1]))
-            self.cache_poids[l] = np.random.normal(0, 2, (nb_neurone[l], nb_neurone[l-1]))
-            self.biais[l] = np.random.normal(0, 2, (nb_neurone[l], 1))
-            self.cache_biais[l] = np.random.normal(0, 2, (nb_neurone[l], 1))
-            self.z[l] = np.random.normal(0, 2, (nb_neurone[l], 1))
+            self.poids[l] = np.random.normal(0, 3, (nb_neurone[l], nb_neurone[l-1]))
+            self.cache_poids[l] = np.zeros((nb_neurone[l], nb_neurone[l-1]))
+            self.biais[l] = np.random.normal(0, 3, (nb_neurone[l], 1))
+            self.cache_biais[l] = np.zeros((nb_neurone[l], 1))
+            self.z[l] = np.zeros((nb_neurone[l], 1))
 
         #On aura besoin de plus tard l'information sur la réponse attendue de l'IA
         self.ans = np.zeros((10, 1))
@@ -43,24 +43,44 @@ class Neurone:
     def load_couches(self):
         """
         Cette fonction charge les poids et les biais du réseau de neurones, à partir d'un fichier .npy.
-        :param timestamp:
         :return:
         """
+        #TODO : Check if the path is really absolute and won't be perturbed by some modification
+        #TODO : Check if the directory/file exists, else recreate the dir and raise Exception
         #On essaye de trouver tous les timestamps des fichiers de poids et de biais
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        data_dir = os.path.join(script_dir, "data", "layers")
-        timestamps = []
-        for file in os.listdir(data_dir):
-            if os.path.basename(file).endswith(".npy"):
-                timestamps.append(os.path.basename(file)[8:-4])
+        parent_folder = 'data/layers/'
+        trainings_folders = os.listdir(parent_folder)
 
+        #On vérifie s'il existe des fichiers de poids et de biais compatibles
+        info_list = []
+        for file in trainings_folders:
+            with open(f"{parent_folder}{file}/info.txt", 'r') as f:
+                if f.readline().endswith(f"Taille des couches de neurones : {self.nb_neurone}\n"):
+                    info_list.append(file)
+
+        if len(info_list) == 0:
+            raise Exception("Aucun fichier de poids et de biais compatible n'a été trouvé")
+
+        #On demande à l'utilisateur de choisir le timestamp qu'il veut utiliser
+        print("Voici les couches disponibles pour ce réseau:")
+        for i, dossier in enumerate(info_list):
+            print(f"{i + 1}. {os.path.basename(parent_folder)}{dossier}")
+        dossier_choix = input("Entrez le numéro des couches que vous voulez utiliser\n-> ")
+        while not dossier_choix.isdigit() or int(dossier_choix) not in range(1, len(info_list) + 1):
+            dossier_choix = input("Entrez un chiffre valide\n-> ")
+
+        dossier_choisi = info_list[int(dossier_choix) - 1]
+        print(f"Les couches de {os.path.basename(info_list[int(dossier_choix) - 1])} a été chargé")
+
+        #TODO : Change the timestamp from an UUID, where the user choose the one to utilize
         #On prend le dernier timestamp
-        timestamp = sorted(timestamps)[-1]
         for i in range(1, self.nb_couches):
-            poids_file = os.path.join(data_dir, f"poids-{i}-{timestamp}.npy")
-            biais_file = os.path.join(data_dir, f"biais-{i}-{timestamp}.npy")
+            poids_file = os.path.join(parent_folder, dossier_choisi, f"poids/poids-{i}.npy")
+            biais_file = os.path.join(parent_folder, dossier_choisi, f"biais/biais-{i}.npy")
             self.poids[i] = np.load(poids_file)
             self.biais[i] = np.load(biais_file)
+
+
 
     def avancement(self, img_data):
         """
@@ -70,6 +90,8 @@ class Neurone:
         :param img_data:
         :return:
         """
+        #TODO : Adding more activation functions + considering the possibility of a "one-on-one" probability rather than
+        #      a "one-on-all" probability (which resume to replacing or no the last activation function to a softmax).
         self.load_image(img_data)
         for l in range(1, self.nb_couches):
             self.z[l] = np.add(np.dot(self.poids[l], self.activations[l - 1]), self.biais[l])
@@ -88,6 +110,7 @@ class Neurone:
         lorsqu'elle est demandé.
         :return:
         """
+        #TODO : Explaining the calculation in a more concise manner in the docx
         if np.all(self.activations[self.nb_couches - 1] == 0):
             raise Exception("Aucune prédiction n'a été faite")
         self.delta = {} # Reset des valeurs
@@ -108,10 +131,10 @@ class Neurone:
 
         # Calcul des gradients pour les poids et les biais
         for l in range(1, self.nb_couches):
-            self.cache_poids[l] = np.dot(self.delta[l], self.activations[l - 1].T)
-            self.cache_biais[l] = self.delta[l]
+            self.cache_poids[l] += np.dot(self.delta[l], self.activations[l - 1].T)
+            self.cache_biais[l] += self.delta[l]
 
-    def descente_gradient_normal(self, learning_rate):
+    def update(self, learning_rate, batch_size=1):
         """
         Cette fonction met à jour les poids et les biais du réseau de neurones en utilisant la descente de gradient
         normale.
@@ -120,26 +143,14 @@ class Neurone:
         """
         self.gradient()
         for l in range(1, self.nb_couches):
-            self.poids[l] -= learning_rate * self.cache_poids[l]
-            self.biais[l] -= learning_rate * self.cache_biais[l]
+            self.poids[l] -= (learning_rate * self.cache_poids[l]) / batch_size
+            self.biais[l] -= (learning_rate * self.cache_biais[l]) / batch_size
+            self.cache_poids[l] = np.zeros((self.nb_neurone[l], self.nb_neurone[l - 1]))
+            self.cache_biais[l] = np.zeros((self.nb_neurone[l], 1))
 
-    def descente_gradient_stochastic(self, learning_rate, mini_batch_size, data):
-        """
-        Cette fonction effectue en bouche la descente de gradient stochastique, en utilisant des mini-batches
-        pour entraîner le réseau de neurones.
-        :param learning_rate:
-        :param mini_batch_size:
-        :param data:
-        :return:
-        """
-        for i in range(mini_batch_size):
-            self.avancement(data[i])
-            self.gradient()
-        for l in range(1, self.nb_couches):
-            self.poids[l] -= (self.cache_poids[l] * learning_rate)/ mini_batch_size
-            self.biais[l] -= (self.cache_biais[l] * learning_rate)/ mini_batch_size
 
 #==================== Fonctions mathématiques ====================#
+#TODO : Add more activation functions and giving a better description of that section
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
@@ -153,7 +164,7 @@ def relu_prime(x):
     return np.where(x > 0, 1, 0)
 
 def elu(x):
-    return np.where(x > 0, x, 0.01 * (np.exp(x) - 1))
+    return np.maximum(0.01 * (np.exp(x) - 1), x)
 
 def elu_prime(x):
     return np.where(x > 0, 1, 0.01 * np.exp(x))

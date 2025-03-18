@@ -1,12 +1,13 @@
 # C'est le programme principal du projet AI. Son but principal est de charger n'importe quel type de données d'images du
 # répertoire /Datasets et d'entraîner le réseau de neurones pour reconnaître les images. L'utilisateur peut choisir entre
 # l'entraînement et le test du réseau.
-import numpy as np
 
 #==================== Importation des modules ====================#
 from neurone import *
+from telemetry import *
 import os
 import time
+import matplotlib.pyplot as plt
 
 #==================== Obtention des datasets ====================#
 # Le but de cette section est de récupérer tous les datasets disponibles dans le répertoire /data/Datasets.
@@ -60,105 +61,160 @@ print(f"Le dataset {os.path.basename(saved_datasets[int(dataset_choice) - 1]).re
 
 #==================== Initialisation des variables ====================#
 # Les variables suivantes sont utilisées pour l'entraînement du réseau de neurones.
-epoch = 10
-mini_batch_size = 300
-n = len(data)
-total_batches = n // mini_batch_size
-learning_rate = 0.025
+epoch = 1
+batch_size = 1
+n = len(data) # Pour le moment, il va utiliser 100% du dataset; à changer plus tard, si on effectue + d'époques
+total_batches = n // batch_size
+learning_rate = 0.8
 activation_function = 0 # 0: Sigmoid, 1: ReLU, 2: ELU
 
+#TODO : ASK THE USER IF THESE VARIABLES ARE OKAY
 #On va revérifier avec la console pour voir si c'est volontaire ou non
 
+if batch_size * total_batches < n:
+    print("Le nombre d'images n'est pas divisible par la taille du mini-batch. Certaines images ne seront pas utilisées")
 #==================== Réseau de neurones ====================#
 # Le réseau de neurones est initialisé avec les paramètres suivants :
-neurone = Neurone([784, 18, 18, 10], activation_function)
-
-def perte_func(y_pred, y_ans):
-    return 1/len(y_pred) * np.sum(np.array(y_pred - y_ans) ** 2)
+neurone = Neurone([784, 16, 16, 10], activation_function)
+acc = 0
 
 #==================== Entraînement / Test ====================#
 # Le code va demander à l'utilisateur s'il veut créer un entraînement ou un test du réseau de neurones.
+#TODO : Ajouter le showcase
 mode_utilisation = int(input("Voulez-vous entraîner ou tester le réseau de neurone ?\n"
                          "Entraîner : 0\nTester : 1\n-> "))
 
 # La fonction de descente de gradient stochastique est utilisée pour entraîner le réseau de neurones.
-def training():
-    print("#" * 40)
-    print(f"Entraînement sur {n} images avec {total_batches} batches par epoch")
-    for e in range(epoch):
-        epoch_loss = 0
-        correct_predictions = 0
-        total_prediction = 0
+def training(e=epoch, bs=batch_size, lr=learning_rate, d=data):
+    test_true, test_total, test_loss = 0, 0, 0
+    batch_dict = {}
+    global acc
+    for i in range(e):
+        print(f"Epoch {i + 1}/{e} started")
+        epoch_true, epoch_total, epoch_loss = 0, 0, 0
 
-        print(f"Epoch {e + 1}/{epoch} started")
-        np.random.shuffle(data)
+        # Shuffle data at the beginning of each epoch
+        np.random.shuffle(d)
 
-        for j in range(0, n, mini_batch_size):
-            if j % (mini_batch_size * 10) == 0:
-                print(f"  Progress: {j // mini_batch_size}/{total_batches} batches")
+        # Create mini-batches and do the SGD
+        for j in range(0, n, bs):
+            batch_dict[j] = d[j:j + bs]
+            batch_loss, batch_total, batch_true = 0, 0, 0
 
-            # Get the mini-batch (ensure we don't go out of bounds)
-            end_idx = min(j + mini_batch_size, n)
-            mini_batch = data[j:end_idx]
-            batch_loss = 0
+            #Prédiction du réseau de chaque image
+            for k in range(bs):
+                neurone.avancement(batch_dict[j][k])
+                neurone.gradient()
+                pred_ans = np.argmax(neurone.activations[neurone.nb_couches - 1])
+                real_ans = np.argmax(neurone.ans)
 
-            # Process each example in the mini-batch
-            for k in range(len(mini_batch)):
-                # Forward pass
-                neurone.avancement(mini_batch[k])
+                # Track metrics
+                batch_total += 1
+                if pred_ans == real_ans:
+                    batch_true += 1
 
-                # Calculate loss
-                loss = perte_func(neurone.activations[neurone.nb_couches - 1], neurone.ans)
-                batch_loss += loss
 
-                # Update weights after every example (stochastic)
-                neurone.descente_gradient_normal(learning_rate)
+            # Update weights and biases
+            neurone.update(lr, bs)
 
-                # Count correct predictions
-                total_prediction += 1
-                if np.argmax(neurone.activations[neurone.nb_couches - 1]) == np.argmax(neurone.ans):
-                    correct_predictions += 1
+            # Calculate loss
+            # batch_loss += perte_func(neurone.activations[neurone.nb_couches - 1], neurone.ans)
 
-            # Update epoch loss
-            epoch_loss += batch_loss / len(mini_batch)
+            # Update epoch statistics
+            epoch_true += batch_true
+            epoch_total += bs
+            epoch_loss += batch_loss
 
-        print(f"Epoch {e + 1}/{epoch} finished with a loss of {epoch_loss:.2f} and an accuracy of "
-              f"{(correct_predictions / total_prediction) * 100:.2f} %")
+            # Print batch progress periodically
+            if (j // bs) % 5 == 0:
+                print(f"  Batch {j // bs}/{total_batches}: "
+                      f"Loss: {batch_loss / bs:.4f}, "
+                      f"Accuracy: {(batch_true / bs) * 100:.2f}%")
+
+        # Calculate epoch metrics
+        test_total += epoch_total
+        test_true += epoch_true
+        acc = (test_true / test_total) * 100
+        avg_loss = epoch_loss / test_total
+
+        # Print epoch results
+        print(f"Epoch {i + 1}/{e} finished with:")
+        # print(f"  Loss: {avg_loss:.4f}")
+        print(f"  Accuracy: {acc:.2f}%")
 
 def testing():
+    #TODO : CHANGER LE CODE ENTIER DE TESTING
     print("#" * 40)
     print(f"Test sur {n} images avec {total_batches} batches")
     total_prediction = 0
     correct_predictions = 0
-    for j in range(0, n, mini_batch_size):
-        if j % (mini_batch_size * 10) == 0:
-            print(f"  Progress: {j // mini_batch_size}/{total_batches} batches")
+    neurone.load_couches()
+    for j in range(0, n, batch_size):
+        if j % (batch_size * 10) == 0:
+            print(f"  Progress: {j // batch_size}/{total_batches} batches")
 
         # Get the mini-batch (ensure we don't go out of bounds)
-        end_idx = min(j + mini_batch_size, n)
+        end_idx = min(j + batch_size, n)
         mini_batch = data[j:end_idx]
+
 
         # Process each example in the mini-batch
         for k in range(len(mini_batch)):
-            neurone.load_couches()
+            plot = mini_batch[k][1::].reshape(28, 28).T
             neurone.avancement(mini_batch[k])
             total_prediction += 1
-            if np.argmax(neurone.activations[neurone.nb_couches - 1]) == np.argmax(neurone.ans):
+            pred_ans = np.argmax(neurone.activations[neurone.nb_couches - 1])
+            real_ans = np.argmax(neurone.ans)
+            if pred_ans == real_ans:
                 correct_predictions += 1
 
-        print(f"Test finished with an accuracy of {(correct_predictions / total_prediction) * 100:.2f} %")
+            print(f"Prediction : {pred_ans} / Réponse : {real_ans} / Precision : {(correct_predictions / total_prediction) * 100:.4f} %"
+                  f" / {"✔" if pred_ans == real_ans else "✘"}")
+            plt.imshow(plot, cmap='gray', vmin=0, vmax=255)
+            plt.show()
+            time.sleep(1)
 
-def save_couches(acc=0):
+    print(f"Test finished with an accuracy of {(correct_predictions / total_prediction) * 100:.2f} %")
+
+def showcase():
+    #TODO : CRÉER LE CODE DE SHOWCASE POUR MONTRER LES IMAGES PAR TEST
+    pass
+
+
+def save_couches(accuracy=acc):
     """
     Cette fonction sauvegarde les poids et les biais du réseau de neurones dans un fichier .npy.
     :return:
     """
-    timestamp = time.time_ns()
+    timestamp = (time.time() // 1)
+
     print("#" * 40)
-    print(f"Tentative de sauvegarde des poids et biais à {time.ctime()}")
-    for i in range(1, neurone.nb_couches):
-        np.save(f"data/layers/poids-{i}-{timestamp}.npy", neurone.poids[i])
-        np.save(f"data/layers/biais-{i}-{timestamp}.npy", neurone.biais[i])
+    print(f"Tentative de sauvegarde des poids et biais à {time.strftime('%H:%M:%S', time.localtime())}")
+
+    #Crée un dossier pour l'entraînement
+    parent_folder = f'./data/layers/{int(timestamp)}_test/'
+    os.mkdir(parent_folder)
+
+    #Crée un sous-dossier pour les poids et les biais
+    poids_folder = f'{parent_folder}/poids/'
+    biais_folder = f'{parent_folder}/biais/'
+    os.mkdir(poids_folder)
+    os.mkdir(biais_folder)
+
+    #Création d'un fichier texte pour stocker les informations sur le réseau
+    with open(f"{parent_folder}/info.txt", "w") as file:
+        file.write(f"Taille des couches de neurones : {neurone.nb_neurone}\n")
+        file.write(f"Timestamp (en secondes) : {timestamp}\n")
+        file.write(f"Loss de l'entraînement: UNKNOWN\n") #TODO : ADD THE LOSS
+        file.write(f"Nombre d'époques : {epoch}\n")
+        file.write(f"Taille des mini-batch : {batch_size}\n")
+        file.write(f"Taux d'apprentissage : {learning_rate}\n")
+        file.write(f"Fonction d'activation utilisé : {activation_function}\n")
+
+    # Sauvegarde des poids et biais dans ce dossier
+    for num in range(1, neurone.nb_couches):
+        np.save(f"{poids_folder}/poids-{num}.npy", neurone.poids[num])
+        np.save(f"{biais_folder}/biais-{num}.npy", neurone.biais[num])
 
     print("Poids et biais sauvegardé :)")
 
