@@ -1,11 +1,8 @@
-# C'est la base du réseau de neurone. Il contient les fonctions d'activation, les fonctions de coût, les fonctions de
-# dérivées, etc. Il est utilisé par le neurone pour effectuer les calculs nécessaires à l'entraînement et à la prédiction.
-
-#==================== Importation des modules ====================#
 import numpy as np
 import os
 
-#==================== Classe du neurone ====================#
+#This code is focused only on the neural network, including mathematics functions and caching.
+#==================== AI Class ====================#
 class Neurone:
     def __init__(self, nb_neurone:list, mode=0):
         #On récupère les informations sur les couches du réseau
@@ -20,9 +17,9 @@ class Neurone:
             if l == 0:
                 self.activations[l] = np.zeros((self.nb_neurone[l], 1))
                 continue
-            self.poids[l] = np.random.normal(0, 3, (nb_neurone[l], nb_neurone[l-1]))
+            self.poids[l] = np.random.normal(0, 0.5, (nb_neurone[l], nb_neurone[l-1]))
             self.cache_poids[l] = np.zeros((nb_neurone[l], nb_neurone[l-1]))
-            self.biais[l] = np.random.normal(0, 3, (nb_neurone[l], 1))
+            self.biais[l] = np.random.normal(0, 0.25, (nb_neurone[l], 1))
             self.cache_biais[l] = np.zeros((nb_neurone[l], 1))
             self.z[l] = np.zeros((nb_neurone[l], 1))
 
@@ -30,6 +27,7 @@ class Neurone:
         self.ans = np.zeros((10, 1))
         self.mode = mode # 0 = Sigmoïde; 1 = ReLU; 2 = ELU (Il y en a d'autres à venir)
 
+    #=============== Loading and saving ===============#
     def load_image(self, img_data):
         """
         Cette fonction charge les données de l'image, séparant les pixels de la réponse attendue.
@@ -80,8 +78,21 @@ class Neurone:
             self.poids[i] = np.load(poids_file)
             self.biais[i] = np.load(biais_file)
 
+        def update(self, learning_rate, batch_size=1):
+            """
+            Cette fonction met à jour les poids et les biais du réseau de neurones en utilisant la descente de gradient
+            normale.
+            :param learning_rate:
+            :return:
+            """
+            self.gradient()
+            for l in range(1, self.nb_couches):
+                self.poids[l] -= (learning_rate * self.cache_poids[l]) / batch_size
+                self.biais[l] -= (learning_rate * self.cache_biais[l]) / batch_size
+                self.cache_poids[l] = np.zeros((self.nb_neurone[l], self.nb_neurone[l - 1]))
+                self.cache_biais[l] = np.zeros((self.nb_neurone[l], 1))
 
-
+    #=============== Feedforward and backpropagation ===============#
     def avancement(self, img_data):
         """
         Cette fonction effectue, étape par étape, l'avancement de la prédiction du réseau de neurone, couche par couche.
@@ -118,59 +129,50 @@ class Neurone:
         # Calcul du delta de la couche de sortie
         couche_final = self.nb_couches - 1
         if self.mode == 0:  # Sigmoid
-            self.delta[couche_final] = np.multiply((self.activations[couche_final] - self.ans), sigmoid_prime(self.z[couche_final]).reshape(-1, 1))
+            self.delta[couche_final] = np.multiply((self.activations[couche_final] - self.ans), sigmoid(self.z[couche_final], True).reshape(-1, 1))
         elif self.mode == 1:  # ReLU
-            self.delta[couche_final] = np.multiply((self.activations[couche_final] - self.ans), relu_prime(self.z[couche_final]).reshape(-1, 1))
+            self.delta[couche_final] = np.multiply((self.activations[couche_final] - self.ans), relu(self.z[couche_final], True).reshape(-1, 1))
 
         # Calcul des deltas des couches cachées
         for l in range(couche_final - 1, 0, -1):
             if self.mode == 0:  # Sigmoid
-                self.delta[l] = np.multiply(np.dot(self.poids[l + 1].T, self.delta[l + 1]), sigmoid_prime(self.z[l]).reshape(-1, 1))
+                self.delta[l] = np.multiply(np.dot(self.poids[l + 1].T, self.delta[l + 1]), sigmoid(self.z[l], True).reshape(-1, 1))
             elif self.mode == 1:  # ReLU
-                self.delta[l] = np.multiply(np.dot(self.poids[l + 1].T, self.delta[l + 1]), relu_prime(self.z[l]).reshape(-1, 1))
+                self.delta[l] = np.multiply(np.dot(self.poids[l + 1].T, self.delta[l + 1]), relu(self.z[l], True).reshape(-1, 1))
 
         # Calcul des gradients pour les poids et les biais
         for l in range(1, self.nb_couches):
             self.cache_poids[l] += np.dot(self.delta[l], self.activations[l - 1].T)
             self.cache_biais[l] += self.delta[l]
 
-    def update(self, learning_rate, batch_size=1):
-        """
-        Cette fonction met à jour les poids et les biais du réseau de neurones en utilisant la descente de gradient
-        normale.
-        :param learning_rate:
-        :return:
-        """
-        self.gradient()
-        for l in range(1, self.nb_couches):
-            self.poids[l] -= (learning_rate * self.cache_poids[l]) / batch_size
-            self.biais[l] -= (learning_rate * self.cache_biais[l]) / batch_size
-            self.cache_poids[l] = np.zeros((self.nb_neurone[l], self.nb_neurone[l - 1]))
-            self.cache_biais[l] = np.zeros((self.nb_neurone[l], 1))
-
-
-#==================== Fonctions mathématiques ====================#
+#==================== Mathematics functions ====================#
 #TODO : Add more activation functions and giving a better description of that section
-def sigmoid(x):
+def sigmoid(x, derivative=False):
+    if derivative:
+        return np.multiply(sigmoid(x), (1 - sigmoid(x)))
     return 1 / (1 + np.exp(-x))
 
-def sigmoid_prime(x):
-    return np.multiply(sigmoid(x), (1 - sigmoid(x)))
+def tanh(x, derivative=False):
+    if derivative:
+        return
+    return np.tanh(x)
 
-def relu(x):
+def relu(x, derivative=False):
+    if derivative:
+        return np.where(x > 0, 1, 0)
     return np.maximum(0, x)
 
-def relu_prime(x):
-    return np.where(x > 0, 1, 0)
-
-def elu(x):
+def elu(x, derivative=False):
+    if derivative:
+        return np.where(x > 0, 1, 0.01 * np.exp(x))
     return np.maximum(0.01 * (np.exp(x) - 1), x)
 
-def elu_prime(x):
-    return np.where(x > 0, 1, 0.01 * np.exp(x))
+def softmax(x, derivative=False):
+    if derivative:
+        return
+    return
 
-def perte_func(y_pred, y_ans):
-    return 1/len(y_pred) * np.sum((y_pred - y_ans) ** 2)
-
-def perte_prime(y_pred, y_ans):
-    return 2/len(y_pred) * np.sum(y_pred - y_ans)
+def perte_func(y_pred, y_ans, derivative=False):
+    if derivative:
+        return 2 / len(y_pred) * np.sum(y_pred - y_ans)
+    return 1/len(y_pred) * np.sum(np.power((y_pred - y_ans), 2))

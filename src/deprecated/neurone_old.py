@@ -1,134 +1,173 @@
-import numpy as np
+# C'est la base du réseau de neurone. Il contient les fonctions d'activation, les fonctions de coût, les fonctions de
+# dérivées, etc. Il est utilisé par le neurone pour effectuer les calculs nécessaires à l'entraînement et à la prédiction.
 
-#==================== Fonction de mathématique ====================#
+#==================== Importation des modules ====================#
+import numpy as np
+import os
+
+#==================== Classe du neurone ====================#
+class Neurone:
+    def __init__(self, nb_neurone:list, mode=0):
+        #On récupère les informations sur les couches du réseau
+        self.nb_couches = len(nb_neurone)
+        self.nb_neurone = nb_neurone
+
+        #On crée des dictionnaires contenant toutes les couches qu'on utilisera
+        self.activations, self.poids, self.biais, self.z = {}, {}, {}, {}
+        self.cache_poids, self.cache_biais, self.delta = {}, {}, {} #Ainsi que des dictionnaires pour le gradient
+
+        for l in range(self.nb_couches):
+            if l == 0:
+                self.activations[l] = np.zeros((self.nb_neurone[l], 1))
+                continue
+            self.poids[l] = np.random.normal(0, 0.5, (nb_neurone[l], nb_neurone[l-1]))
+            self.cache_poids[l] = np.zeros((nb_neurone[l], nb_neurone[l-1]))
+            self.biais[l] = np.random.normal(0, 0.25, (nb_neurone[l], 1))
+            self.cache_biais[l] = np.zeros((nb_neurone[l], 1))
+            self.z[l] = np.zeros((nb_neurone[l], 1))
+
+        #On aura besoin de plus tard l'information sur la réponse attendue de l'IA
+        self.ans = np.zeros((10, 1))
+        self.mode = mode # 0 = Sigmoïde; 1 = ReLU; 2 = ELU (Il y en a d'autres à venir)
+
+    def load_image(self, img_data):
+        """
+        Cette fonction charge les données de l'image, séparant les pixels de la réponse attendue.
+        :param img_data:
+        :return:
+        """
+        self.activations[0] = np.matrix(img_data[1::]).reshape(-1, 1) / 255.0
+        self.ans = np.zeros((10, 1))
+        self.ans[int(img_data[0])] = 1
+
+    def load_couches(self):
+        """
+        Cette fonction charge les poids et les biais du réseau de neurones, à partir d'un fichier .npy.
+        :return:
+        """
+        #TODO : Check if the path is really absolute and won't be perturbed by some modification
+        #TODO : Check if the directory/file exists, else recreate the dir and raise Exception
+        #On essaye de trouver tous les timestamps des fichiers de poids et de biais
+        parent_folder = 'data/layers/'
+        trainings_folders = os.listdir(parent_folder)
+
+        #On vérifie s'il existe des fichiers de poids et de biais compatibles
+        info_list = []
+        for file in trainings_folders:
+            with open(f"{parent_folder}{file}/info.txt", 'r') as f:
+                if f.readline().endswith(f"Taille des couches de neurones : {self.nb_neurone}\n"):
+                    info_list.append(file)
+
+        if len(info_list) == 0:
+            raise Exception("Aucun fichier de poids et de biais compatible n'a été trouvé")
+
+        #On demande à l'utilisateur de choisir le timestamp qu'il veut utiliser
+        print("Voici les couches disponibles pour ce réseau:")
+        for i, dossier in enumerate(info_list):
+            print(f"{i + 1}. {os.path.basename(parent_folder)}{dossier}")
+        dossier_choix = input("Entrez le numéro des couches que vous voulez utiliser\n-> ")
+        while not dossier_choix.isdigit() or int(dossier_choix) not in range(1, len(info_list) + 1):
+            dossier_choix = input("Entrez un chiffre valide\n-> ")
+
+        dossier_choisi = info_list[int(dossier_choix) - 1]
+        print(f"Les couches de {os.path.basename(info_list[int(dossier_choix) - 1])} a été chargé")
+
+        #TODO : Change the timestamp from an UUID, where the user choose the one to utilize
+        #On prend le dernier timestamp
+        for i in range(1, self.nb_couches):
+            poids_file = os.path.join(parent_folder, dossier_choisi, f"poids/poids-{i}.npy")
+            biais_file = os.path.join(parent_folder, dossier_choisi, f"biais/biais-{i}.npy")
+            self.poids[i] = np.load(poids_file)
+            self.biais[i] = np.load(biais_file)
+
+    def avancement(self, img_data):
+        """
+        Cette fonction effectue, étape par étape, l'avancement de la prédiction du réseau de neurone, couche par couche.
+        Il récupère les données de l'image (img_data : ndarray) et, selon son mode d'activation, effectue les calculs
+        nécessaires pour l'activation des neurones suivants.
+        :param img_data:
+        :return:
+        """
+        #TODO : Adding more activation functions + considering the possibility of a "one-on-one" probability rather than
+        #      a "one-on-all" probability (which resume to replacing or no the last activation function to a softmax).
+        self.load_image(img_data)
+        for l in range(1, self.nb_couches):
+            self.z[l] = np.add(np.dot(self.poids[l], self.activations[l - 1]), self.biais[l])
+            if self.mode == 0:
+                self.activations[l] = sigmoid(self.z[l])
+            elif self.mode == 1:
+                self.activations[l] = relu(self.z[l])
+            elif self.mode == 2:
+                self.activations[l] = elu(self.z[l])
+            else:
+                raise Exception("Mode d'activation invalide")
+
+    def gradient(self):
+        """
+        Cette fonction effectue le calcul du gradient une seule fois pour chaque poids et biais, prêt à être utilisé
+        lorsqu'elle est demandé.
+        :return:
+        """
+        #TODO : Explaining the calculation in a more concise manner in the docx
+        if np.all(self.activations[self.nb_couches - 1] == 0):
+            raise Exception("Aucune prédiction n'a été faite")
+        self.delta = {} # Reset des valeurs
+
+        # Calcul du delta de la couche de sortie
+        couche_final = self.nb_couches - 1
+        if self.mode == 0:  # Sigmoid
+            self.delta[couche_final] = np.multiply((self.activations[couche_final] - self.ans), sigmoid_prime(self.z[couche_final]).reshape(-1, 1))
+        elif self.mode == 1:  # ReLU
+            self.delta[couche_final] = np.multiply((self.activations[couche_final] - self.ans), relu_prime(self.z[couche_final]).reshape(-1, 1))
+
+        # Calcul des deltas des couches cachées
+        for l in range(couche_final - 1, 0, -1):
+            if self.mode == 0:  # Sigmoid
+                self.delta[l] = np.multiply(np.dot(self.poids[l + 1].T, self.delta[l + 1]), sigmoid_prime(self.z[l]).reshape(-1, 1))
+            elif self.mode == 1:  # ReLU
+                self.delta[l] = np.multiply(np.dot(self.poids[l + 1].T, self.delta[l + 1]), relu_prime(self.z[l]).reshape(-1, 1))
+
+        # Calcul des gradients pour les poids et les biais
+        for l in range(1, self.nb_couches):
+            self.cache_poids[l] += np.dot(self.delta[l], self.activations[l - 1].T)
+            self.cache_biais[l] += self.delta[l]
+
+    def update(self, learning_rate, batch_size=1):
+        """
+        Cette fonction met à jour les poids et les biais du réseau de neurones en utilisant la descente de gradient
+        normale.
+        :param learning_rate:
+        :return:
+        """
+        self.gradient()
+        for l in range(1, self.nb_couches):
+            self.poids[l] -= (learning_rate * self.cache_poids[l]) / batch_size
+            self.biais[l] -= (learning_rate * self.cache_biais[l]) / batch_size
+            self.cache_poids[l] = np.zeros((self.nb_neurone[l], self.nb_neurone[l - 1]))
+            self.cache_biais[l] = np.zeros((self.nb_neurone[l], 1))
+
+#==================== Fonctions mathématiques ====================#
+#TODO : Add more activation functions and giving a better description of that section
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def sigmoid_prime(x):
+    return np.multiply(sigmoid(x), (1 - sigmoid(x)))
+
 def relu(x):
     return np.maximum(0, x)
 
 def relu_prime(x):
     return np.where(x > 0, 1, 0)
 
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
+def elu(x):
+    return np.maximum(0.01 * (np.exp(x) - 1), x)
 
-def sigmoid_prime(x):
-    return sigmoid(x) * (1 - sigmoid(x))
+def elu_prime(x):
+    return np.where(x > 0, 1, 0.01 * np.exp(x))
 
-def logistic(x):
-    return x / (1 + x)
+def perte_func(y_pred, y_ans):
+    return 1/len(y_pred) * np.sum(np.power((y_pred - y_ans), 2))
 
-def fonction_de_cout(y_predit, y_reel):
-    return (y_predit - y_reel) ** 2
-
-#Détail important: il faut utiliser ReLu avant softmax (dernière couche)fin d'éviter les problèmes!!!
-def softmax(x): #Fonction qui sert à transformer les reps d'un output en pourcentage. (La somme des valeurs=1). ex) [2.3, 1.1, 0.5] devient [0.7, 0.2, 0.1] signifiant qu'il y a 70% de chance que ce soit la première classe, 20% la 2e, etc.
-    exp_x = np.exp(x - np.max(x))  # Soustraction pour stabilité numérique
-    return exp_x / np.sum(exp_x)
-
-#==================== Code de vérification ====================#
-def compatibility_test():
-    pass
-
-#==================== Classe du réseau neuronal ====================#
-class Neurone:
-    def __init__(self, *nb_neurone, learning_rate=1):
-        self.layer_sizes = nb_neurone[0]
-        self.num_layers = len(self.layer_sizes)
-        self.learning_rate = learning_rate
-        self.activations, self.biais, self.poids, self.z, self.cache_w, self.cache_b, self.delta = {}, {}, {}, {}, {}, {}, {}
-
-        for i in range(self.num_layers):
-            couche_nom = f'couche_{i}'
-            self.activations[couche_nom] = np.zeros(self.layer_sizes[i])
-            if i < self.num_layers - 1:
-                self.poids[f'w_{i}'] = np.random.randn(self.layer_sizes[i], self.layer_sizes[i + 1])
-                self.cache_w[f'cache_w_{i}'] = np.zeros((self.layer_sizes[i], self.layer_sizes[i + 1]))
-                self.biais[f'b_{i}'] = np.random.random_sample(self.layer_sizes[i + 1])
-                self.cache_b[f'cache_b_{i}'] = np.zeros(self.layer_sizes[i + 1])
-                self.z[f'z_{i}'] = np.zeros((self.layer_sizes[i], self.layer_sizes[i + 1]))
-
-    def avancement(self, image, mode='sigmoid'):
-        self.set(image)
-        for i in range(self.num_layers - 1):
-            self.z[f'z_{i}'] = np.dot(self.activations[f'couche_{i}'], self.poids[f'w_{i}']) + self.biais[f'b_{i}']
-            if i != (self.num_layers - 2):
-                if mode == 'sigmoid':
-                    self.activations[f'couche_{i + 1}'] = sigmoid(self.z[f'z_{i}'])
-                elif mode == 'relu':
-                    self.activations[f'couche_{i + 1}'] = relu(self.z[f'z_{i}'])
-                else:
-                    exit("Mode invalide")
-            else:
-                if mode == 'sigmoid':
-                    self.activations[f'couche_{i + 1}'] = softmax(self.z[f'z_{i}'])
-
-    def backpropagation(self, y_reel, iter=0, activation='sigmoid'):
-        self.delta = {}
-
-        y_predit = self.activations[f'couche_{self.num_layers - 1}']
-        for i in range(self.num_layers - 2, -1, -1):
-            if activation == "sigmoid":
-                self.delta_sigmoid(y_predit, y_reel, i)
-            elif activation == "relu":
-                self.delta_relu(y_predit, y_reel, i)
-
-            # Calculate gradients
-            self.cache_w[f'cache_w_{i}'] = self.learning_rate * np.dot(self.activations[f'couche_{i}'].reshape(-1, 1), self.delta.T)
-            self.cache_b[f'cache_b_{i}'] = self.learning_rate * np.squeeze(np.mean(self.delta, axis=1, keepdims=True))
-
-        if iter == 0:
-            for i in range(self.num_layers - 2, -1, -1):
-                self.poids[f'w_{i}'] -= self.cache_w[f'cache_w_{i}']
-                self.biais[f'b_{i}'] -= self.cache_b[f'cache_b_{i}']
-
-                # Reset
-                self.cache_w[f'cache_w_{i}'] = np.zeros((self.layer_sizes[i], self.layer_sizes[i + 1]))
-                self.cache_b[f'cache_b_{i}'] = np.zeros(self.layer_sizes[i + 1])
-
-
-    def delta_relu(self, y_predit, y_reel, i):
-        #Dernière couche
-        if self.num_layers - 2 == i:
-            y_predit = np.array(y_predit).flatten()
-            y_reel = np.array(y_reel).flatten()
-            error = y_predit - y_reel
-            self.delta[i] = np.multiply(error, relu_prime(self.z[f'z_{i}']).reshape(-1, 1))
-        #Couches cachées
-        else:
-            delta_av = self.delta[i+1]
-            poids_av = self.poids[f'w_{i + 1}']
-            self.delta[i] = np.multiply(np.dot(poids_av, delta_av), relu_prime(self.z[f'z_{i}']))
-
-    def delta_sigmoid(self, y_predit, y_reel, i):
-        if self.num_layers - 2 == i:
-            y_predit = np.array(y_predit).flatten()
-            y_reel = np.array(y_reel).flatten()
-            error = y_predit - y_reel
-            self.delta = np.multiply(error, sigmoid_prime(self.z[f'z_{i}']).reshape(-1, 1))
-        else:
-            delta_av = self.delta[i + 1]
-            poids_av = self.poids[f'w_{i + 1}']
-            self.delta[i] = np.multiply(np.dot(poids_av, delta_av), sigmoid_prime(self.z[f'z_{i}']))
-
-    def set(self, new_img):
-        self.activations = {}
-        for i in range(self.num_layers):
-            couche_nom = f'couche_{i}'
-            self.activations[couche_nom] = np.zeros(self.layer_sizes[i])
-        self.activations['couche_0'] = new_img
-
-    def caching(self, io, nom="interrupted_data"):  # Ajouter le paramètre de pouvoir choisir le nom du fichier
-        if io == 'save':
-            data = self.poids, self.biais
-            np.save(f'{nom}.npy', data)
-        elif io == 'load':
-            data = np.load(f'{nom}.npy')
-
-#==================== Test du module ====================#
-if __name__ == "__main__":
-    neurone = Neurone([784, 24, 12, 10], 0.05)
-    neurone.set(np.random.random_sample(784))
-    neurone.avancement()
-    neurone.backpropagation(np.random.random_sample(10), 1)
-    neurone.caching('save')
-    neurone.caching('load')
-    print("Test réussi")
+def perte_prime(y_pred, y_ans):
+    return 2/len(y_pred) * np.sum(y_pred - y_ans)
