@@ -70,7 +70,6 @@ def selection_dataset(datasets):
     return data
 
 #=============== Logique du réseau ===============#
-
 def entrainement(neurone, donnees, epochs, batch_size, learning_rate):
     """Entraîne le réseau de neurones et affiche les métriques."""
     n = len(donnees)
@@ -156,8 +155,7 @@ def entrainement(neurone, donnees, epochs, batch_size, learning_rate):
     plt.tight_layout()
     plt.show()
 
-    return acc, avg_loss
-
+    input("Appuyez sur Enter pour quitter :")
 
 def test(neurone, donnees, batch_size):
     """Test le réseau de neurones sur des données (sans visualisation)."""
@@ -189,8 +187,7 @@ def test(neurone, donnees, batch_size):
 
     precision = (correct_predictions / total_prediction) * 100 if total_prediction > 0 else 0
     print(f"Test terminé avec une précision de {precision:.2f}%")
-
-    return precision
+    input("Appuyez sur Enter pour quitter :")
 
 def showcase(neurone, donnees, batch_size, nb_examples=10):
     """Visualise les prédictions du réseau sur quelques exemples."""
@@ -244,6 +241,9 @@ def showcase(neurone, donnees, batch_size, nb_examples=10):
             if choix.lower() == 'q':
                 break
 
+    print("Fin des exemples")
+    input("Appuyez sur Enter pour quitter :")
+
 def sauvegarder_couches(neurone, parametres, accuracy=None, loss=None):
     """Sauvegarde les poids et biais du réseau de neurones."""
     timestamp = int(time.time())
@@ -277,6 +277,7 @@ def sauvegarder_couches(neurone, parametres, accuracy=None, loss=None):
         np.save(f"{biais_folder}/biais-{num}.npy", neurone.biais[num])
 
     print("Poids et biais sauvegardés avec succès!")
+    input("Appuyez sur Enter pour quitter :")
 
 #=============== Programme principal ===============#
 
@@ -289,6 +290,8 @@ def main():
         "learning_rate": 0.8,
         "activation_function": 0  # 0: Sigmoid, 1: ReLU, 2: ELU
     }
+
+    nombre_exemples = 10 # À changer pour showcase
 
     # Collecte des datasets
     datasets = collecte_datasets()
@@ -308,7 +311,7 @@ def main():
                      "Entraîner : 0\nTester : 1\nVisualiser : 2\n-> "))
 
     if mode == 0:  # Entraînement
-        accuracy, loss = entrainement(
+        entrainement(
             reseau,
             data,
             parametres["epoch"],
@@ -317,12 +320,15 @@ def main():
         )
         sauvegarder_couches(reseau, parametres, accuracy, loss)
         return None
+
     elif mode == 1:  # Test (statistiques)
         test(reseau, data, parametres["batch_size"])
         return None
+
     elif mode == 2:  # Showcase (visualisation)
-        showcase(reseau, data, parametres["batch_size"])
+        showcase(reseau, data, parametres["batch_size"], nombre_exemples)
         return None
+
     else:
         quit("Choix invalide")
 
