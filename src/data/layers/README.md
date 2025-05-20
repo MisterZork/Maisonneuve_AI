@@ -1,0 +1,1 @@
+Ici se trouvent les réseaux entraînés. Vous pouvez renommer les dossiers, mais pas les couches par eux-mêmes.
