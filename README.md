@@ -5,10 +5,6 @@
 - [Description](#description)
 - [Installation](#installation)
 - [Utilisation](#utilisation)
-- [Structure du projet](#structure-du-projet)
-- [Dépendances](#dépendances)
-- [Contribution](#contribution)
-- [Licence](#licence)
 
 ## Description
 
