@@ -1,7 +1,0 @@
-[build-system]
-requires = ["hatchling >= 1.26"]
-build-backend = "hatchling.build"
-
-[project]
-version = "2.0.0"
-name = "Maisonneuve AI"
