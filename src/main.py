@@ -4,6 +4,7 @@ import time
 import matplotlib.pyplot as plt
 from neurone import Neurone, perte_func
 
+#=============== Collecte des données ===============#
 
 def collecte_datasets():
     """Collecte et prépare tous les datasets disponibles."""
@@ -68,6 +69,7 @@ def selection_dataset(datasets):
 
     return data
 
+#=============== Logique du réseau ===============#
 
 def entrainement(neurone, donnees, epochs, batch_size, learning_rate):
     """Entraîne le réseau de neurones et affiche les métriques."""
@@ -276,6 +278,7 @@ def sauvegarder_couches(neurone, parametres, accuracy=None, loss=None):
 
     print("Poids et biais sauvegardés avec succès!")
 
+#=============== Programme principal ===============#
 
 def main():
     """Fonction principale."""
@@ -290,12 +293,12 @@ def main():
     # Collecte des datasets
     datasets = collecte_datasets()
     if not datasets:
-        return None
+        quit("Il n'y a pas de datasets")
 
     # Sélection d'un dataset
     data = selection_dataset(datasets)
     if data is None:
-        return None
+        quit("Collecte de données impossible")
 
     # Initialisation du réseau de neurones
     reseau = Neurone([784, 16, 16, 10], parametres) #CHNAGER LA TAILLE DU RÉSEAU ICI
@@ -321,9 +324,7 @@ def main():
         showcase(reseau, data, parametres["batch_size"])
         return None
     else:
-        print("Choix invalide")
-        return None
-
+        quit("Choix invalide")
 
 if __name__ == "__main__":
     main()
